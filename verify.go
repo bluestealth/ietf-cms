@@ -112,10 +112,14 @@ func (sd *SignedData) verify(econtent []byte, opts x509.VerifyOptions) ([][][]*x
 				return nil, errors.New("invalid message digest")
 			}
 
-			// The signature is over the DER encoded signed attributes, minus the
-			// leading class/tag/length bytes. This includes the digest of the
-			// original message, so it is implicitly signed too.
-			if signedMessage, err = si.SignedAttrs.MarshaledForSigning(); err != nil {
+			// The signature is over the DER encoded signed attributes as a sequence
+			// instead of a set, but with a set tag, minus the leading class/tag/length
+			// bytes. This matches the incorrect behavior of golang asn1 prior to 1.15.
+			// This includes the digest of the original message, so it is implicitly
+			// signed too. The DER encoding is likely not altered in transit, and will
+			// remain sorted, so there is no reason to sort during parsing. This also
+			// matches the behavior of OpenSSL.
+			if signedMessage, err = si.SignedAttrs.MarshaledOrderedSetForSigning(); err != nil {
 				return nil, err
 			}
 		}
