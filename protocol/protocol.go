@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/github/ietf-cms/oid"
@@ -683,7 +684,11 @@ func (sd *SignedData) AddSignerInfo(chain []*x509.Certificate, signer crypto.Sig
 		return err
 	}
 
-	si.SignedAttrs = append(si.SignedAttrs, stAttr, mdAttr, ctAttr)
+	// sort attributes to match required order in marshaled form
+	si.SignedAttrs, err = sortAttributes(stAttr, mdAttr, ctAttr)
+	if err != nil {
+		return err
+	}
 
 	// Signature is over the marshaled signed attributes
 	sm, err := si.SignedAttrs.MarshaledForSigning()
@@ -703,6 +708,19 @@ func (sd *SignedData) AddSignerInfo(chain []*x509.Certificate, signer crypto.Sig
 	sd.SignerInfos = append(sd.SignerInfos, si)
 
 	return nil
+}
+
+func sortAttributes(attrs ...Attribute) ([]Attribute, error) {
+	// Sort attrs by their encoded values (including tag and
+	// lengths) as specified in X690 Section 11.6 and implemented
+	// in go >= 1.15's asn1.Marshal().
+	sort.Slice(attrs, func(i, j int) bool {
+		return bytes.Compare(
+			attrs[i].RawValue.FullBytes,
+			attrs[j].RawValue.FullBytes) < 0
+	})
+
+	return attrs, nil
 }
 
 // algorithmsForPublicKey takes an opinionated stance on what algorithms to use
